@@ -19,7 +19,7 @@
             ?>
             <div class="landingCalTime timeMid">
                 <p><?= htmlspecialchars($interviews[$i]->title) ?>,</p>
-                <p><?= htmlspecialchars($interviews[$i]->title) ?>,</p>
+                <p><?= htmlspecialchars($interviews[$i]->name) ?>,</p>
                 <p><?= substr($interviews[$i]->time_start, 0, 5) ?></p>
             </div>
             <?php
