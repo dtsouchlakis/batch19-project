@@ -71,9 +71,9 @@ function checkUserSignInGoogle($decodedToken)
 function userSignUp($firstName, $lastName, $email, $pwd, $pwd2)
 {
     //validate data
-    $firstNameValid = preg_match("/^[a-z._]+$/", $firstName);
-    $lastNameValid = preg_match("/^[a-z._]+$/", $lastName);
-    $pwdValid = preg_match("/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{4,16}$/", $pwd);
+    $firstNameValid = preg_match("/^[A-Za-z._]+$/", $firstName);
+    $lastNameValid = preg_match("/^[A-Za-z._]+$/", $lastName);
+    $pwdValid = preg_match("/^.{8,}$/", $pwd);
     $pwd2Valid  = $pwd === $pwd2;
     $emailValid = preg_match("/^[a-z0-9_.@]{3,20}$/i", $_POST['email']);
 
@@ -81,16 +81,11 @@ function userSignUp($firstName, $lastName, $email, $pwd, $pwd2)
         //if data good, insert into database w model function
         $userManager = new UserManager();
         $user = $userManager->insertUser($firstName, $lastName, $email, $pwd);
-
+        
         if ($user) {
-            //create a session for when the user is logged in
-            $_SESSION['id'] = $user->user_id;
-            $_SESSION['first_name'] = $user->first_name;
-            $_SESSION['last_name'] = $user->last_name;
-            header("Location: index.php?action=userProfileView");
-            print_r($_SESSION);
+            echo "Your account has been created! Please sign in :) ";
         } else {
-            echo "Your account has been created! Please click on the 'SIGN IN' button to login :) ";
+            echo "Something went wrong, please try again.";
         }
         require "./view/signUpView.php";
     } else {
@@ -113,7 +108,7 @@ function companySignUp($firstName, $lastName, $email, $pwd, $pwd2, $companyName,
 {
     $firstNameValid = preg_match("/^[a-zA-Z]+$/i", $firstName);
     $lastNameValid = preg_match("/^[a-zA-Z]+$/i", $lastName);
-    $pwdValid = preg_match("/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{4,16}$/", $pwd);
+    $pwdValid = preg_match("/^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$/", $pwd);
     $pwd2Valid  = $pwd === $pwd2;
 
     require_once("./controller/blacklist.php");
@@ -134,17 +129,11 @@ function companySignUp($firstName, $lastName, $email, $pwd, $pwd2, $companyName,
         $userManager = new UserManager();
         $user = $userManager->insertCompanyUser($firstName, $lastName, $email, $pwd, $companyName, $companyTitle);
         if ($user) {
-            //create a session for when the company is logged in
-            $_SESSION['id'] = $user->user_id;
-            $_SESSION['first_name'] = $user->first_name;
-            $_SESSION['last_name'] = $user->last_name;
-            $_SESSION['company_id'] = $user->company_id;
-            print_r($_SESSION);
-            header("Location: index.php?action=companyDashboard");
+            echo "Your account has been created! Please sign in :) ";
         } else {
-            echo "Something went wrong.";
+            echo "Something went wrong, please try again.";
         }
-        // require "./view/signUpView.php";
+        require "./view/signUpView.php";
     } else {
         $msg = "Please fill in all inputs.";
         echo "something was invalid.";
@@ -168,9 +157,9 @@ function userSignIn($email, $pwd)
         $_SESSION['company_id'] = $user->company_id;
 
 
-        if ($user->company_id != null) {
+        if ($_SESSION['company_id'] != null) {
             $companyManager = new CompanyManager();
-            $companyInfo = $companyManager->fetchCompanyInfo();
+            $companyInfo = $companyManager->fetchCompanyInfo($_SESSION['company_id']);
 
             $_SESSION['company_id'] = $companyInfo->id;
             $_SESSION["profile_pic"] = $companyInfo->logo_img;
@@ -179,22 +168,11 @@ function userSignIn($email, $pwd)
             $_SESSION["date_created"] = $companyInfo->date_created;
             header("Location: index.php?action=companyDashboard");
         } else {
-
             header("Location: index.php?action=userProfileView");
             exit;
         }
     } else {
-        throw new Exception("Invalid Information");
-    }
-
-    $user = $userManager->signInUser($email, $pwd);
-
-    if (!$user) {
-        throw new Exception("Invalid Info");
-    } else {
-        //if data good, allow sign in
-        header("index.php"); //TODO: change header location
-        exit;
+        throw new Exception("Invalid Information. Please make sure the fields have been inputted correctly.");
     }
 }
 
@@ -573,7 +551,6 @@ function talentRating($id, $yearsExperience, $skills, $desiredPositions, $highes
 
 function showUserProfileView()
 {
-
     $userManager = new UserManager();
     $user = $userManager->getUserProfile($_SESSION['id']);
     $experiences = $userManager->getUserExperience($_SESSION['id']);
@@ -585,12 +562,15 @@ function showUserProfileView()
     $allLanguages = $userManager->getLanguagesList();
     $allCities = $userManager->getCitiesList();
     $calendarManager = new CalendarManager();
+    purgePrior($_SESSION['id']);
     $entries = $calendarManager->loadCalendar($_SESSION['id']);
+    deactivateOldUserMeetings($_SESSION['id']);
     $receives = $calendarManager->loadInterviews($_SESSION['id']);
     if (isset($_SESSION['id'])) {
         $userId = $_SESSION['id'];
         $chats = loadChats($userId); // TODO: move this to signed in view
     }
+
     if (isset($user->profile_picture)) {
         $profileImg = $user->profile_picture;
     }
@@ -599,6 +579,31 @@ function showUserProfileView()
     require("./view/userProfileView.php");
 }
 
+function purgePrior($user_id) {
+    $calendarManager = new CalendarManager();
+    $result = $calendarManager->loadCalendar($user_id);
+    foreach($result as $entry) {
+        $d = "$entry->date $entry->time_start";
+        $ad = strtotime($d);
+        if ($ad < time()) {
+            $CalendarManager = new CalendarManager();
+            $result = $CalendarManager->updateDeletion($entry->date, $entry->time_start, $user_id);
+        }
+    }
+}
+
+function deactivateOldUserMeetings($user_id) {
+    $calendarManager = new CalendarManager();
+    $result = $calendarManager->loadInterviews($user_id);
+    foreach($result as $entry) {
+        $d = "$entry->date $entry->time_start";
+        $ad = strtotime($d);
+        if ($ad < time()) {
+            $CalendarManager = new CalendarManager();
+            $result = $CalendarManager->updateMeeting($entry->id);
+        }
+    }
+}
 
 function updateUserPersonal($id, $phoneNb, $city, $salary, $visa, $profilePic, $oldImage)
 {
@@ -709,7 +714,7 @@ function addNewJob($jobTitle, $jobStory, $salaryMin, $salaryMax, $cities, $deadl
     $companyInfo = $companyManager->fetchCompanyBasicInfo();
     $result = $companyManager->insertNewJob($jobTitle, $jobStory, $salaryMin, $salaryMax, $cities, $deadline);
     if ($result) {
-        // TODO: finish this bish!
+        // TODO: finish this!
         header("Location: ./index.php?action=jobListings");
     } else {
         echo "Adding job failed, please contact the administrator";
@@ -729,7 +734,7 @@ function getCompanyInfo()
     }
 
     $companyManager = new CompanyManager();
-    $companyInfo = $companyManager->fetchCompanyInfo();
+    $companyInfo = $companyManager->fetchCompanyInfo($_SESSION['company_id']);
 
     // print_r($companyInfo);
 
@@ -762,7 +767,7 @@ function uploadImage($file)
 function updateCompanyInfo($bizName, $bizAddress, $email, $phone, $webSite, $logo, $oldLogo)
 {
     $companyManager = new CompanyManager();
-    $companyInfo = $companyManager->fetchCompanyInfo();
+    $companyInfo = $companyManager->fetchCompanyInfo($_SESSION['company_id']);
     if ($logo) {
         $logo = uploadImage($logo);
     } else {
@@ -771,7 +776,6 @@ function updateCompanyInfo($bizName, $bizAddress, $email, $phone, $webSite, $log
     $result = $companyManager->changeCompanyInfo($bizName, $bizAddress, $email, $phone, $webSite, $logo);
 
     if ($result[0] and $result[1]) {
-
         header("location:index.php?action=companyDashboard");
     } else {
         throw new Exception("Update failed.");
@@ -937,8 +941,9 @@ function showTalentProfileView($id, $jobID = null)
     $skills = showSkills($id);
     $languages = showLanguages($id);
     $calendarManager = new CalendarManager();
+    purgePrior($id);
     $entries = $calendarManager->loadCalendar($id);
-    $interviews = $calendarManager->loadTalentInterviews($id);
+    deactivateOldTalentMeetings($id);
     if (isset($_SESSION['id'])) {
         $user = $userManager->getUserProfile($_SESSION['id']);
         $userId = $_SESSION['id'];
@@ -950,6 +955,19 @@ function showTalentProfileView($id, $jobID = null)
 
 
     require("./view/talentProfileView.php");
+}
+
+function deactivateOldTalentMeetings($user_id) {
+    $calendarManager = new CalendarManager();
+    $result = $calendarManager->loadTalentInterviews($user_id);
+    foreach($result as $entry) {
+        $d = "$entry->date $entry->time_start";
+        $ad = strtotime($d);
+        if ($ad < time()) {
+            $CalendarManager = new CalendarManager();
+            $result = $CalendarManager->updateMeeting($entry->id);
+        }
+    }
 }
 
 function bookInterview($uaID, $id, $jobID)

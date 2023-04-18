@@ -53,40 +53,8 @@ class UserManager extends Manager
         $req->bindParam('pwdHash', $pwdHash, PDO::PARAM_STR);
         $req->bindParam('email', $email, PDO::PARAM_STR);
         $req->bindParam('inProfile_picture', $defaultProfilePic, PDO::PARAM_STR);
-        $wasAdded = $req->execute();
-        $req->closeCursor();
-        //if a user was added, we'll fetch this info and run one more query
-        //this query is to get the info for the session
-        if ($wasAdded) {
-            $req = $db->query("SELECT LAST_INSERT_ID() AS user_id, first_name, last_name FROM users WHERE id = LAST_INSERT_ID()");
-            return $req->fetch(PDO::FETCH_OBJ);
-        } else {
-            return false;
-        }
+        return $req->execute();
     }
-
-    // public function updateUserPersonal($id, $phoneNb, $city, $salary, $visa)
-    // {
-    //     $db = $this->dbConnect();
-    //     // this is to check and get the city id from the cities table. cities -> city_id(matching the city name) -> pass id inside users.
-    //     $getCityId = "SELECT id FROM cities where name = :inCity AND country_code = 'KR' "; //query
-    //     $req = $db->prepare($getCityId);
-    //     $req->bindParam(':inCity', $city, PDO::PARAM_STR);
-    //     $cityId = $req->execute();
-    //     $cityId = $req->fetchAll(PDO::FETCH_OBJ);
-    //     $cityId = $cityId[0]->id ?? NULL; // the city id in table cities
-
-    //     $updateUserP = "UPDATE users SET phone_number = :inPhoneNb, city_id = :inCity, visa_sponsorship = :inVisa, desired_salary = :inSalary WHERE id = :id";
-    //     $req = $db->prepare($updateUserP);
-    //     $req->bindParam('id', $id, PDO::PARAM_INT);
-    //     $req->bindParam('inPhoneNb', $phoneNb, PDO::PARAM_INT);
-    //     $req->bindParam(':inCity', $cityId, PDO::PARAM_STR);
-    //     $req->bindParam('inSalary', $salary, PDO::PARAM_INT);
-    //     $req->bindParam('inVisa', $visa, PDO::PARAM_INT);
-    //     $result2 = $req->execute();
-    //     return //htmlspecialchars
-    //         $result2;
-    // }
 
     public function getUserEducation($userId)
     {
@@ -153,12 +121,15 @@ class UserManager extends Manager
     {
         $db = $this->dbConnect();
         //hash pw
+
+        $defaultProfilePic = "./public/images/uploaded/defaultComp.jpg";
+
         $pwdHash = password_hash($pwd, PASSWORD_DEFAULT);
         //inserting first into companies table
         //then set the most recent insert id as the id for users table, then insert there too
-        $preparedinsertSql = "INSERT INTO companies (name) VALUES (:companyname);
+        $preparedinsertSql = "INSERT INTO companies (name, email, logo_img) VALUES (:companyname, :email, :inProfile_picture);
         SET @last_id_in_table1 = LAST_INSERT_ID();
-        INSERT INTO users (first_name,last_name,password,email,user_bio,company_id,login_type) VALUES (:first_name, :last_name, :pwdHash, :email, :companytitle, @last_id_in_table1, 0)";
+        INSERT INTO users (first_name,last_name,password,email,user_bio,company_id,login_type, profile_picture) VALUES (:first_name, :last_name, :pwdHash, :email, :companytitle, @last_id_in_table1, 0, :inProfile_picture)";
         $req = $db->prepare($preparedinsertSql);
 
         $req->bindParam(':first_name', $firstName, PDO::PARAM_STR);
@@ -167,17 +138,9 @@ class UserManager extends Manager
         $req->bindParam(':email', $email, PDO::PARAM_STR);
         $req->bindParam(':companyname', $companyName, PDO::PARAM_STR);
         $req->bindParam(':companytitle', $companyTitle, PDO::PARAM_STR);
+        $req->bindParam(':inProfile_picture', $defaultProfilePic, PDO::PARAM_STR);
 
-        $wasAdded = $req->execute();
-        $req->closeCursor();
-        //if a company was added, we'll fetch this info and run one more query
-        //this query is to get the info for the session
-        if ($wasAdded) {
-            $req = $db->query("SELECT LAST_INSERT_ID() AS user_id, company_id, first_name, last_name FROM users WHERE id = LAST_INSERT_ID()");
-            return $req->fetch(PDO::FETCH_OBJ);
-        } else {
-            return false;
-        }
+        return $req->execute();
     }
 
     public function getUserProfile($userId)
@@ -193,7 +156,7 @@ class UserManager extends Manager
     public function getUserSkills($userId)
     {
         $db = $this->dbConnect();
-        //TODO: get user skills WHERE user id matches;
+        
         $userSkills = "SELECT user_id, skill_id FROM user_skill_map WHERE user_id =?";
         $req = $db->prepare($userSkills);
         $req->execute([$userId]);
@@ -220,7 +183,7 @@ class UserManager extends Manager
     public function getCitiesList()
     {
         $db = $this->dbConnect();
-        $res = $db->query('SELECT id, CONCAT(name, " - ", country_code) AS item FROM cities');
+        $res = $db->query('SELECT id, CONCAT(name, " - ", country_code) AS item FROM cities_kr');
         $cities = $res->fetchAll(PDO::FETCH_ASSOC);
         return $cities;
     }
@@ -228,7 +191,7 @@ class UserManager extends Manager
     public function getCityName($cityId)
     {
         $db = $this->dbConnect();
-        $cityName = ("SELECT name FROM cities WHERE id = :inCityId");
+        $cityName = ("SELECT name FROM cities_kr WHERE id = :inCityId");
         $req = $db->prepare($cityName);
         $req->bindParam(':inCityId', $cityId, PDO::PARAM_INT);
         $req->execute();
@@ -250,7 +213,7 @@ class UserManager extends Manager
     {
         $db = $this->dbConnect();
         // this is to check and get the city id from the cities table. cities -> city_id(matching the city name) -> pass id inside users.
-        $getCityId = "SELECT id FROM cities where name = :inCity AND country_code = 'KR' "; //query
+        $getCityId = "SELECT id FROM cities_kr WHERE name = :inCity AND country_code = 'KR' "; //query
         $req = $db->prepare($getCityId);
         $req->bindParam(':inCity', $city, PDO::PARAM_STR);
         $cityId = $req->execute();
@@ -264,15 +227,16 @@ class UserManager extends Manager
         $req->bindParam('inSalary', $salary, PDO::PARAM_INT);
         $req->bindParam('inVisa', $visa, PDO::PARAM_INT);
         $req->bindParam("inProfilePic", $profilePic, PDO::PARAM_STR);
-        $result1 = $req->execute();
+        $result = $req->execute();
+        return $result;
 
-        $query = "UPDATE users SET profile_picture = :inProfilePic WHERE id = :userID";
-        $req = $db->prepare($query);
-        $req->bindParam("userID", $USER_ID, PDO::PARAM_INT);
-        $req->bindParam("inProfilePic", $profilePic, PDO::PARAM_STR);
+        // $query = "UPDATE users SET profile_picture = :inProfilePic WHERE id = :userID";
+        // $req = $db->prepare($query);
+        // $req->bindParam("userID", $USER_ID, PDO::PARAM_INT);
+        // $req->bindParam("inProfilePic", $profilePic, PDO::PARAM_STR);
 
-        $result2 = $req->execute();
-        return [$result1, $result2];
+        // $result2 = $req->execute();
+        // return [$result1, $result2];
     }
 
     // public function getEducationLevel($educationId)
