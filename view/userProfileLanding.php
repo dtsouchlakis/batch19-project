@@ -109,7 +109,6 @@ exit;
     </button>
     <?php }
     ?>
-    </div>
 
     <h1><i class="fa-solid fa-handshake-simple"></i>Scheduled Interviews</h1>
     <button class="landingBtn" onclick="showCalendarPage()">
