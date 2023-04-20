@@ -36,6 +36,10 @@ contain the landing page in a wrapper... HTML and body should have width and hei
   z-index: 2;
 }
 
+.header > .menu > a {
+  all: unset;
+}
+
 .logo {
   display: inline-block;
   position: relative;

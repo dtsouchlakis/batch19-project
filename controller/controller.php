@@ -71,12 +71,11 @@ function checkUserSignInGoogle($decodedToken)
 function userSignUp($firstName, $lastName, $email, $pwd, $pwd2)
 {
     //validate data
-    $firstNameValid = preg_match("/^[A-Za-z._]+$/", $firstName);
-    $lastNameValid = preg_match("/^[A-Za-z._]+$/", $lastName);
-    $pwdValid = preg_match("/^.{8,}$/", $pwd);
+    $firstNameValid = preg_match("/^[a-z._]{2,30}$/i", $firstName);
+    $lastNameValid = preg_match("/^[a-z._]{2,30}$/i", $lastName);
+    $pwdValid = preg_match("/^.{8,}$/i", $pwd);
     $pwd2Valid  = $pwd === $pwd2;
-    $emailValid = preg_match("/^[a-z0-9_.@]{3,20}$/i", $_POST['email']);
-
+    $emailValid = filter_var($_POST['email'], FILTER_VALIDATE_EMAIL);
     if ($firstNameValid and $lastNameValid and $emailValid and $pwdValid and $pwd2Valid) {
         //if data good, insert into database w model function
         $userManager = new UserManager();
